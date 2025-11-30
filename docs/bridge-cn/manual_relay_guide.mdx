@@ -1,0 +1,186 @@
+---
+title: 手动中继指南
+sidebar_position: 6
+sidebar_label: 手动中继指南
+---
+
+import { eth, vara } from '@site/src/addresses/bridge-addresses.js';
+
+# 手动消息桥接
+
+本指南描述了如果**中继器不可用**时如何手动推送消息通过 Vara 网络和 Ethereum 网络之间的跨链桥。所有步骤都以 `USDT` 代币为例进行说明，但相同的过程适用于任何支持的代币或任意跨链消息。
+
+:::note
+如果中继器不可用，任何桥接消息都保留在链上，并且可以在任何时候手动中继。
+不会丢失任何消息；手动中继只是完成过程并完成传递。
+:::
+
+:::important
+在桥接之前始终验证所有合约地址。
+
+本指南中的地址用于当前测试部署。
+
+**无论您是在测试网还是主网上桥接消息，最新的合约地址始终可以在 [Vara 跨链桥开发者中心](https://wiki.vara.network/docs/bridge/developer_hub) 找到。**
+:::
+
+## 桥接 Ethereum → Vara
+
+### 1. 批准代币转移
+
+![批准 USDT 用于桥接](./img/approve.png)
+
+- **打开** <a href={`https://hoodi.etherscan.io/address/${eth.usdt}`}>Hoodi Etherscan 上的测试 USDT 合约</a>。
+- 转到 **Contract → Write Contract** 选项卡。
+- 点击 **Connect to Web3** 并选择带有发送者账户的钱包。
+- 使用 `approve` 方法：
+  - **spender:** <code>{eth.erc20ManagerProxy}</code> (Hoodi 上的 Erc20Manager Proxy 地址)
+  - **value:** 要转移的金额（USDT 使用 6 位小数，所以 `1 USDT = 1_000_000`, `5 USDT = 5_000_000`）
+
+### 2. 启动桥接
+
+![请求桥接](./img/request-bridging.png)
+
+- **打开** <a href={`https://hoodi.etherscan.io/address/${eth.erc20ManagerProxy}#writeProxyContract`}>Hoodi Etherscan 上的 Erc20Manager Proxy 合约</a>。
+- 转到 **Contract → Write as Proxy**。
+- 如果需要，连接钱包。
+- 使用 `requestBridging` 方法：
+  - **token:** <code>{eth.usdt}</code> (USDT 地址)
+  - **amount:** 同上或更少（≤ 批准的金额）
+  - **to:** Vara 上的接收者地址（十六进制字符串，例如，从 <a href="https://ss58.org">ss58.org</a> 转换自 SS58）
+- **发送** 交易。
+
+此时，Erc20Manager 发出一个 `BridgingRequested` 事件。
+
+### 3. 将事件数据中继到 Vara
+
+最后一步是将桥接事件的证明从 Ethereum 中继到 Vara 网络。这意味着提供证据证明所需的 Ethereum 区块已最终确定，并且包含相关事件（`BridgingRequested`）的交易实际上已包含并在链上执行。
+
+![用于桥接的事件哈希 USDT](./img/event_hash.png)
+
+为此：
+
+- **找到发出 `BridgingRequested` 事件的交易哈希**。
+- 这在提交桥接交易后的事件列表中可见。
+- 此哈希作为链上证明的唯一引用，将被中继器用来收集和提交从 Ethereum 到 Vara 的所有必要数据。
+
+接下来，运行 Gear Bridge Relayer Docker 容器，向其提供交易哈希和其他必需参数。
+
+```sh
+docker pull ghcr.io/gear-tech/bridge-relayer:main.1037c949fb897aa855ec117830747e6fb16749c4
+```
+
+> Gear Bridge Relayer 的最新 Docker 镜像发布在：[https://github.com/gear-tech/gear-bridges/pkgs/container/bridge-relayer](https://github.com/gear-tech/gear-bridges/pkgs/container/bridge-relayer)
+
+<pre>
+{`docker run --rm -it --platform linux/amd64 \
+ghcr.io/gear-tech/bridge-relayer:main.1037c949fb897aa855ec117830747e6fb16749c4 \
+gear-eth-manual \
+  --tx-hash <TX_HASH> \
+  --checkpoint-light-client ${vara.checkpointLightClient} \
+  --historical-proxy ${vara.historicalProxy} \
+  --receiver-program ${vara.vftManager} \
+  --ethereum-endpoint "wss://hoodi-reth-rpc.gear-tech.io/ws" \
+  --ethereum-beacon-rpc https://hoodi-nimbus-rpc.gear-tech.io \
+  --gear-domain wss://testnet.vara.network \
+  --gear-port 443 \
+  --gear-suri "<SUBSTRATE_MNEMONIC_PHRASE>"
+`}
+</pre>
+
+将 `<TX_HASH>` 替换为您的交易哈希。
+将 `<SUBSTRATE_MNEMONIC_PHRASE>` 替换为**支付网络费用的 Vara 账户的助记词短语**。
+
+:::note
+**提交证明后，最终确定（奖励）过程不是即时的。**
+您必须首先等待 Vara 上的轻客户端包含所需的 Ethereum 区块（通常在桥接交易挖出后约 15-20 分钟）。
+只有在此同步之后，证明才能在链上提交和验证。
+
+一旦跨链证明被接受，转移的代币将出现在 Vara 上。
+:::
+
+要确认结果，请使用 `balanceOf` 函数检查 Vara 上**包装的 USDT 代币程序**的状态。
+这可以在 <a href={`https://idea.gear-tech.io/programs/${vara.wusdt}?node=wss%3A%2F%2Ftestnet-archive.vara.network`}>IDEA</a> 上完成：
+- 点击 "Read state"
+- 选择 `balanceOf`
+- 输入接收者地址
+
+成功桥接后，更新的余额将反映接收到的代币。
+
+---
+
+## 桥接 Vara → Ethereum
+
+从 Vara 到 Ethereum 的桥接过程与上述反向方向**非常相似**。
+
+用户与 Vara 上的 **VftManager 程序**交互。桥接流程包括以下主要步骤：
+
+### 0. （可选）将 TVARA 代币化为 VFT
+
+如果您的代币尚未代币化为 VFT（Vara 可替代代币），您需要使用 `VftNativeExchange::Mint` 消息转换您的 TVARA。
+这将在 <a href={`https://idea.gear-tech.io/programs/${vara.tokenizedVara}?node=wss%3A%2F%2Ftestnet-archive.vara.network`}>TVARA 代币程序</a> 中铸造所需数量的 VFT。
+
+### 1. 批准 VftManager 花费代币
+
+![批准 TVARA](./img/vara-approve.png)
+
+- 打开 VFT 代币合约，例如 <a href={`https://idea.gear-tech.io/programs/${vara.tokenizedVara}?node=wss%3A%2F%2Ftestnet-archive.vara.network`}>TVARA 代币程序</a>。
+- 使用 `approve` 函数：
+  - **spender:** <code>{vara.vftManager}</code> (VftManager 地址)
+  - **value:** 要转移的金额（TVARA 使用 12 位小数，所以 `1 TVARA = 1_000_000_000_000`）
+
+### 2. 通过 VftManager 请求桥接
+
+![请求 TVARA 桥接](./img/vara-request-bridging.png)
+
+- 打开 <a href={`https://idea.gear-tech.io/programs/${vara.vftManager}?node=wss%3A%2F%2Ftestnet-archive.vara.network`}>VftManager 程序</a>
+- 调用 `RequestBridging` 函数：
+  - **vara_token_id:** 代币合约的地址（例如，<code>{vara.tokenizedVara}</code>）
+  - **amount:** 要桥接的金额（必须 ≤ 批准的值）
+  - **receiver:** Ethereum 接收者地址（十六进制）
+
+在成功执行**批准**和**RequestBridging** 步骤后，
+VftManager 程序发出一个 `BridgingRequested` 事件，包含一个 `nonce` 和 `block` 编号。
+
+**如何找到事件：**
+- 转到 <a href={`https://idea.gear-tech.io/programs/${vara.vftManager}?node=wss%3A%2F%2Ftestnet-archive.vara.network`}>VftManager 程序</a>
+- 切换到 **Events** 选项卡以定位相关的 `BridgingRequested` 事件并复制 `nonce` 和 `block` 值。
+
+![事件 TVARA](./img/vara-bridging-request-event.png)
+
+### 3. 将证明中继到 Ethereum
+
+使用来自您的 `BridgingRequested` 事件的 `nonce` 和 `block` 值运行中继器 Docker 容器。
+
+<pre>
+{`docker run --rm -it --platform linux/amd64 \
+ghcr.io/gear-tech/bridge-relayer:main.1037c949fb897aa855ec117830747e6fb16749c4 \
+gear-eth-manual \
+  --message-nonce "<NONCE>" \
+  --message-block <BLOCK> \
+  --from-eth-block <ETH_BLOCK> \
+  --gear-domain wss://testnet-archive.vara.network \
+  --gear-port 443 \
+  --ethereum-endpoint "wss://hoodi-reth-rpc.gear-tech.io/ws" \
+  --mq-address "${vara.messageQueueProxy}" \
+  --eth-fee-payer "<ETH_PRIVATE_KEY>"
+`}
+</pre>
+
+![如何获取 Ethereum 区块](./img/eth-block.png)
+
+- 要获取 `<ETH_BLOCK>`，请转到 <a hreg="https://hoodi.etherscan.io/address/${eth.erc20ManagerProxy}#events"> erc20 Manager Proxy 合约</a>，找到您相关的桥接交易，并记下发出事件的 Ethereum 区块编号。使用此区块编号作为 `--from-eth-block` 的值。
+- `<MQ_ADDRESS>`：这是跨链桥使用的 MQ（Message Queue Proxy）地址。您可以在文档中或在 Etherscan 上的合约的 Read/Write 面板中找到它。
+- `<ETH_PRIVATE_KEY>`：您的 Ethereum 费用支付者私钥。
+
+:::warning
+密钥仅用于本地签名。中继器不会将您的私钥发送到任何地方，但您应始终小心处理敏感密钥。
+:::
+
+:::note
+Ethereum 上的最终确定和铸造**不是即时的**。
+中继后，消息将被处理，包装的代币（例如，WTVARA）将在确认后出现在接收者的余额中。
+
+**要检查结果，** 在 Etherscan 中打开相应的包装代币合约（例如，WTVARA），转到 "Read Contract" 选项卡，并使用接收者的地址调用 `balanceOf`。
+:::
+
+![查看 TVARA 桥接的结果](./img/vara-eth-res.png)

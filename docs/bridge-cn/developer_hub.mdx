@@ -1,0 +1,164 @@
+---
+title: Vara ↔ Ethereum 跨链桥开发者中心
+sidebar_position: 4
+sidebar_label: 开发者中心
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import { eth, ethMainnet, vara, varaMainnet } from '@site/src/addresses/bridge-addresses.js';
+
+# 开发者中心
+
+本页面为使用 Vara ↔ Ethereum 跨链桥的开发者和集成者提供技术资源。
+它包括两个部署环境（主网和测试网）在以太坊和 Vara 网络上部署的智能合约和链上程序的地址。
+
+:::info 跨链桥访问
+
+- **跨链桥:** [https://bridge.vara.network/](https://bridge.vara.network/)
+
+:::
+
+**使用此部分来：**
+
+- 探索和验证桥接相关合约
+- 开始构建与跨链桥的集成（例如中继器、代币管理器、自定义资产）
+
+---
+
+## Vara 跨链桥部署
+
+:::info
+网络选择 在下面选择您的目标网络以查看相应的合约地址进行集成。
+:::
+
+<Tabs groupId="network" className="network-tabs">
+<TabItem value="mainnet" label="🟢 主网 (生产环境)" default>
+
+<div className="network-section mainnet">
+
+### Ethereum 主网
+
+#### 核心组件
+
+| 组件               | 地址                                                                                                                  |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| **Verifier**       | <a href={`https://etherscan.io/address/${ethMainnet.verifier}`} target="_blank">{ethMainnet.verifier}</a>               |
+| **MessageQueue**   | <a href={`https://etherscan.io/address/${ethMainnet.messageQueue}`} target="_blank">{ethMainnet.messageQueue}</a>       |
+| **Bridging Payment** | <a href={`https://etherscan.io/address/${ethMainnet.bridgingPayment}`} target="_blank">{ethMainnet.bridgingPayment}</a> |
+
+#### 代币合约
+
+| 代币      | 地址                                                                                              |
+| --------- | ------------------------------------------------------------------------------------------------ |
+| **USDC**  | <a href={`https://etherscan.io/address/${ethMainnet.usdc}`} target="_blank">{ethMainnet.usdc}</a>   |
+| **USDT**  | <a href={`https://etherscan.io/address/${ethMainnet.usdt}`} target="_blank">{ethMainnet.usdt}</a>   |
+| **WETH**  | <a href={`https://etherscan.io/address/${ethMainnet.WETH}`} target="_blank">{ethMainnet.WETH}</a>   |
+| **WVARA** | <a href={`https://etherscan.io/address/${ethMainnet.wvara}`} target="_blank">{ethMainnet.wvara}</a> |
+| **WBTC**  | <a href={`https://etherscan.io/address/${ethMainnet.wbtc}`} target="_blank">{ethMainnet.wbtc}</a>   |
+
+#### ERC20 管理器
+
+| 组件          | 地址                                                                                                            |
+| ------------- | -------------------------------------------------------------------------------------------------------------- |
+| **ERC20Manager** | <a href={`https://etherscan.io/address/${ethMainnet.erc20Manager}`} target="_blank">{ethMainnet.erc20Manager}</a> |
+
+#### 桥接治理
+
+| 组件                | 地址                                                                                                                    |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **GovernanceAdmin**  | <a href={`https://etherscan.io/address/${ethMainnet.governanceAdmin}`} target="_blank">{ethMainnet.governanceAdmin}</a>   |
+| **GovernancePauser** | <a href={`https://etherscan.io/address/${ethMainnet.governancePauser}`} target="_blank">{ethMainnet.governancePauser}</a> |
+
+---
+
+### Vara 主网
+
+#### 核心组件
+
+| 组件                       | 地址                                                                                                                                                                        |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **checkpoint-light-client** | <a href={`https://idea.gear-tech.io/programs/${varaMainnet.checkpointLightClient}?node=wss%3A%2F%2Frpc.vara.network`} target="_blank">{varaMainnet.checkpointLightClient}</a> |
+| **historical-proxy**        | <a href={`https://idea.gear-tech.io/programs/${varaMainnet.historicalProxy}?node=wss%3A%2F%2Frpc.vara.network`} target="_blank">{varaMainnet.historicalProxy}</a>             |
+| **vft-manager**             | <a href={`https://idea.gear-tech.io/programs/${varaMainnet.vftManager}?node=wss%3A%2F%2Frpc.vara.network`} target="_blank">{varaMainnet.vftManager}</a>                       |
+| **Bridging Payment**        | <a href={`https://idea.gear-tech.io/programs/${varaMainnet.bridgingPayment}?node=wss%3A%2F%2Frpc.vara.network`} target="_blank">{varaMainnet.bridgingPayment}</a>             |
+
+#### 代币合约
+
+| 代币               | 地址                                                                                                                                                        |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **WUSDC**          | <a href={`https://idea.gear-tech.io/programs/${varaMainnet.wusdc}?node=wss%3A%2F%2Frpc.vara.network`} target="_blank">{varaMainnet.wusdc}</a>                 |
+| **WUSDT**          | <a href={`https://idea.gear-tech.io/programs/${varaMainnet.wusdt}?node=wss%3A%2F%2Frpc.vara.network`} target="_blank">{varaMainnet.wusdt}</a>                 |
+| **WETH**           | <a href={`https://idea.gear-tech.io/programs/${varaMainnet.weth}?node=wss%3A%2F%2Frpc.vara.network`} target="_blank">{varaMainnet.weth}</a>                   |
+| **WBTC**           | <a href={`https://idea.gear-tech.io/programs/${varaMainnet.wbtc}?node=wss%3A%2F%2Frpc.vara.network`} target="_blank">{varaMainnet.wbtc}</a>                   |
+| **Tokenized VARA** | <a href={`https://idea.gear-tech.io/programs/${varaMainnet.tokenizedVara}?node=wss%3A%2F%2Frpc.vara.network`} target="_blank">{varaMainnet.tokenizedVara}</a> |
+
+</div>
+
+</TabItem>
+
+<TabItem value="testnet" label="🟡 测试网 (开发环境)">
+
+<div className="network-section testnet">
+
+### Ethereum 测试网 (Hoodi)
+
+#### 核心组件
+
+| 组件                  | 地址                                                                                                              |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Verifier**          | <a href={`https://hoodi.etherscan.io/address/${eth.verifier}`} target="_blank">{eth.verifier}</a>                   |
+| **MessageQueue**      | <a href={`https://hoodi.etherscan.io/address/${eth.messageQueue}`} target="_blank">{eth.messageQueue}</a>           |
+| **MessageQueue Proxy** | <a href={`https://hoodi.etherscan.io/address/${eth.messageQueueProxy}`} target="_blank">{eth.messageQueueProxy}</a> |
+| **Bridging Payment**  | <a href={`https://hoodi.etherscan.io/address/${eth.bridgingPayment}`} target="_blank">{eth.bridgingPayment}</a>     |
+
+#### 代币合约
+
+| 代币       | 地址                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------ |
+| **USDC**   | <a href={`https://hoodi.etherscan.io/address/${eth.usdc}`} target="_blank">{eth.usdc}</a>     |
+| **USDT**   | <a href={`https://hoodi.etherscan.io/address/${eth.usdt}`} target="_blank">{eth.usdt}</a>     |
+| **WETH**   | <a href={`https://hoodi.etherscan.io/address/${eth.WETH}`} target="_blank">{eth.WETH}</a>     |
+| **WTVARA** | <a href={`https://hoodi.etherscan.io/address/${eth.wtvara}`} target="_blank">{eth.wtvara}</a> |
+
+#### ERC20 管理器
+
+| 组件                  | 地址                                                                                                              |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **ERC20Manager**      | <a href={`https://hoodi.etherscan.io/address/${eth.erc20Manager}`} target="_blank">{eth.erc20Manager}</a>           |
+| **ERC20Manager Proxy** | <a href={`https://hoodi.etherscan.io/address/${eth.erc20ManagerProxy}`} target="_blank">{eth.erc20ManagerProxy}</a> |
+
+#### 桥接治理
+
+| 组件                | 地址                                                                                                            |
+| ------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **GovernanceAdmin**  | <a href={`https://hoodi.etherscan.io/address/${eth.governanceAdmin}`} target="_blank">{eth.governanceAdmin}</a>   |
+| **GovernancePauser** | <a href={`https://hoodi.etherscan.io/address/${eth.governancePauser}`} target="_blank">{eth.governancePauser}</a> |
+
+---
+
+### Vara 测试网
+
+#### 核心组件
+
+| 组件                       | 地址                                                                                                                                                              |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **checkpoint-light-client** | <a href={`https://idea.gear-tech.io/programs/${vara.checkpointLightClient}?node=wss%3A%2F%2Ftestnet.vara.network`} target="_blank">{vara.checkpointLightClient}</a> |
+| **eth-events-electra**      | <a href={`https://idea.gear-tech.io/programs/${vara.ethEventsElectra}?node=wss%3A%2F%2Ftestnet.vara.network`} target="_blank">{vara.ethEventsElectra}</a>           |
+| **historical-proxy**        | <a href={`https://idea.gear-tech.io/programs/${vara.historicalProxy}?node=wss%3A%2F%2Ftestnet.vara.network`} target="_blank">{vara.historicalProxy}</a>             |
+| **vft-manager**             | <a href={`https://idea.gear-tech.io/programs/${vara.vftManager}?node=wss%3A%2F%2Ftestnet.vara.network`} target="_blank">{vara.vftManager}</a>                       |
+| **Bridging Payment**        | <a href={`https://idea.gear-tech.io/programs/${vara.bridgingPayment}?node=wss%3A%2F%2Ftestnet.vara.network`} target="_blank">{vara.bridgingPayment}</a>             |
+
+#### 代币合约
+
+| 代币               | 地址                                                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **WUSDC**          | <a href={`https://idea.gear-tech.io/programs/${vara.wusdc}?node=wss%3A%2F%2Ftestnet.vara.network`} target="_blank">{vara.wusdc}</a>                 |
+| **WUSDT**          | <a href={`https://idea.gear-tech.io/programs/${vara.wusdt}?node=wss%3A%2F%2Ftestnet.vara.network`} target="_blank">{vara.wusdt}</a>                 |
+| **WETH**           | <a href={`https://idea.gear-tech.io/programs/${vara.weth}?node=wss%3A%2F%2Ftestnet.vara.network`} target="_blank">{vara.weth}</a>                   |
+| **Tokenized VARA** | <a href={`https://idea.gear-tech.io/programs/${vara.tokenizedVara}?node=wss%3A%2F%2Ftestnet.vara.network`} target="_blank">{vara.tokenizedVara}</a> |
+
+</div>
+
+</TabItem>
+</Tabs>

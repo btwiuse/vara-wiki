@@ -1,0 +1,222 @@
+---
+title: Vara → Ethereum 应用指南
+sidebar_position: 5
+sidebar_label: Vara → Ethereum 应用指南
+---
+
+# 介绍
+
+跨链通信可能看起来很复杂，但其核心是在独立的区块链之间安全地移动消息和价值。为了使这个过程清晰易懂，使用一个简单的 Ping-Pong 应用程序作为最具说明性的示例，逐步展示在 **Vara ↔ Ethereum 跨链桥** 之上安全跨链消息传递的工作原理。
+
+:::note
+ping-pong 模式是分布式系统中用于演示可靠消息传递的经典示例：从一个链发送简单的 "ping"，并从另一个链接收 "pong" 作为响应。
+:::
+
+本指南重点介绍从 Vara 到 Ethereum 的流程，使用跨链桥内置的基于 ZK 的机制。协议处理繁重的工作——密码学证明、中继和验证——让开发者能够专注于应用逻辑。未来的文章将探讨反向方向（Ethereum → Vara）和额外的跨链模式。
+
+## 高层架构
+
+在高层面上，跨链 ping-pong 应用程序由三个主要部分组成，每个部分专注于自己的职责，同时依赖跨链桥的安全协议层：
+
+1. **在 Vara 上：** 一个用 Rust 编写的 Gear 程序充当 Ping 发送者。它打包一个简单的有效载荷，并使用内置的跨链桥 API 发送它，指定在 Ethereum 上的目标合约。
+   [查看 Vara 程序代码](https://github.com/gear-foundation/cross-ping/tree/master/packages/vara-eth-pinger-vara)
+2. **在中间：** 一个无需许可的中继器监听事件，并在消息的 Merkle 根提交到 Ethereum 后，中继消息进行最终传递。
+   [查看中继器代码](https://github.com/gear-foundation/cross-ping/tree/master/packages/vara-eth-relayer-node)
+3. **在 Ethereum 上：** 一个专门的 MessageQueue 合约验证根和证明。如果有效，它将消息转发到您的目标合约。
+   [查看 Ping 接收器代码](https://github.com/gear-foundation/cross-ping/tree/master/packages/vara-eth-receiver-eth)
+
+## 您不需要实现什么
+
+:::tip
+作为开发者，您**不需要实现**传输层。所有 Merkle 根计算、证明生成、ZK 包含证明和跨链状态同步都由协议和桥接基础设施处理——在后台自动进行。
+:::
+
+您的责任**仅是您的应用程序的自定义逻辑**：如何格式化消息以及如何在到达时处理它。
+
+如果您想深入了解协议内部——包括证明生成、验证者集合管理和消息处理——请参阅官方技术概述：
+[**Vara ↔ Ethereum 跨链桥技术概述**](https://wiki.vara.network/docs/bridge/bridge_technical)
+
+跨链桥的协议确保 Ethereum 可以信任哪些消息是从 Vara 发送的，因此您永远不需要担心证明构建或链上验证的细节。
+您需要用于安全消息传递的一切都已经内置。
+
+---
+
+## Vara → Ethereum 跨链应用程序的实现细节
+
+让我们分解我们的 `CrossPing` 应用程序在 Vara 上的流程和关键实现细节，该应用程序负责启动跨链 ping。
+
+[查看 Vara 程序源代码](https://github.com/gear-foundation/cross-ping/tree/master/packages/vara-eth-pinger-vara)
+
+### 应用程序流程 (Vara)
+
+1. **初始化目标：** 程序使用将接收 ping 的 Ethereum 合约的地址（H160）进行初始化。
+2. **发送 ping：** 当触发时，它准备一个有效载荷（仅发送者的 `ActorId`）并构建一个桥接请求。
+3. **通过内置跨链桥发送消息：** 它使用内置的 actor（Gear-Ethereum Bridge）通过 `send_bytes_with_gas_for_reply` 提交消息，该函数处理 gas 和桥接费用逻辑。
+4. **等待跨链桥响应：** 跨链桥响应一个 nonce 和一个消息哈希，确认消息包含。
+5. **为中继器发出事件：** 程序发出带有所有详细信息的 `PingSent` 事件。这是中继器监听的内容。
+
+---
+
+### 关键组件和接口
+
+- **内置跨链桥 Actor ID：**
+
+```rust
+const BRIDGE_ACTOR_ID: [u8; 32] = [ /* ... 查看完整源代码 ... */ ];
+```
+
+- **目标合约地址：**
+通过 `new(destination: H160)` 在初始化时设置。
+
+- **桥接消息格式：**
+
+```rust
+BridgeRequest::SendEthMessage { destination, payload }
+```
+
+- **Gas & 费用常量：**
+
+```rust
+const GAS_TO_SEND_REQUEST: u64 = 200_000_000_000;
+const FEE_BRIDGE: u128 = 0;
+const GAS_FOR_REPLY_DEPOSIT: u64 = 200_000_000_000;
+```
+
+- **事件发出：**
+发出：
+
+```rust
+Event::PingSent(PingSent {
+  nonce: Some(nonce.as_u64()),
+  message_hash: hash,
+})
+```
+
+---
+
+### 示例：从 Vara 发送 Ping
+
+```rust
+pub async fn send_ping(&mut self) -> Result<(), Error> {
+    let state = unsafe { STATE.as_ref().expect("State not initialized") };
+    let destination = state.destination.ok_or(Error::DestinationNotInitialized)?;
+    let sender = exec::program_id();
+    let payload = sender.as_ref().to_vec();
+    let bridge_actor_id = ActorId::from(BRIDGE_ACTOR_ID);
+
+    let request = BridgeRequest::SendEthMessage { destination, payload }.encode();
+
+    let reply_bytes = msg::send_bytes_with_gas_for_reply(
+        bridge_actor_id,
+        request,
+        GAS_TO_SEND_REQUEST,
+        FEE_BRIDGE,
+        GAS_FOR_REPLY_DEPOSIT,
+    )
+    .map_err(|_| Error::BridgeSendFailed)?
+    .await
+    .map_err(|_| Error::BridgeReplyFailed)?;
+
+    let reply = BridgeResponse::decode(&mut &reply_bytes[..])
+        .map_err(|_| Error::InvalidBridgeResponse)?;
+
+    if let BridgeResponse::EthMessageQueued { nonce, hash } = reply {
+        self.emit_event(Event::PingSent(PingSent {
+            nonce: Some(nonce.as_u64()),
+            message_hash: hash,
+        }))?;
+    }
+
+    Ok(())
+}
+```
+
+---
+
+## 中继器
+
+中继器是一个 Node.js 服务，同时连接到 Vara 和 Ethereum，监听事件，并在 Merkle 根在 Ethereum 上确认后中继消息。
+
+[查看中继器代码](https://github.com/gear-foundation/cross-ping/tree/master/packages/vara-eth-relayer-node)
+
+### 中继器如何工作
+
+1. **连接到 Vara 和 Ethereum：**
+
+```ts
+const gearApi = await connectVara();
+```
+
+2. **监听 PingSent 事件：**
+
+```ts
+await listenPingSent(async ({ nonce, blockNumber, messageHash }) => {
+  console.log(`[Relay] PingSent: nonce=${nonce}, block=${blockNumber}, hash=${messageHash}`);
+  // ...
+});
+```
+
+3. **使用内置等待机制中继消息：**
+
+在最新版本（`@gear-js/bridge@0.1.x`）中，`relayVaraToEth` 函数接受一个 `wait: true` 标志，该标志在内部等待 Merkle 根出现在 Ethereum 上后再进行中继。
+
+```ts
+const result = await relayVaraToEth({
+  nonce,
+  blockNumber,
+  ethereumPublicClient,
+  ethereumWalletClient,
+  ethereumAccount: account,
+  gearApi,
+  messageQueueAddress: MESSAGE_QUEUE_PROXY_ADDRESS,
+  wait: true,
+  statusCb: (status, details) => {
+    console.log(`[Relay] [Status]`, status, details);
+  }
+});
+```
+
+---
+
+## Ethereum 端：Ping 接收器合约
+
+一个最小的合约，通过跨链桥接受消息并发出 `PongEmitted`。
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+interface IMessageHandler {
+    function handleMessage(bytes32 source, bytes calldata payload) external;
+}
+
+contract PingReceiver is IMessageHandler {
+    event PongEmitted(bytes32 sender);
+
+    function handleMessage(bytes32 sender, bytes calldata) external override {
+        emit PongEmitted(sender);
+    }
+}
+```
+
+### 总结
+
+- 您的合约必须实现 `IMessageHandler` 接口。
+- `handleMessage(sender, payload)` 函数由 MessageQueue 调用。
+- 您可以在此方法内对有效载荷执行任何操作。
+
+---
+
+## 端到端验证
+
+发送 ping 后：
+
+1. **检查 Ethereum 上的 MessageQueue 合约** 以获取消息处理事件。
+2. **检查您的 PingReceiver 合约** 以获取 `PongEmitted` 事件。
+3. 中继器在成功传递后记录完整的交易哈希：
+
+```text
+[Relay] ✅ 成功: txHash=0xabc123...
+```
+
+如果日志和事件在 Etherscan（或您的区块浏览器）上正确出现，则一切按预期工作。

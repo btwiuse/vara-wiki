@@ -1,0 +1,185 @@
+---
+title: Ethereum → Vara 应用指南
+sidebar_position: 6
+sidebar_label: Ethereum → Vara 应用指南
+---
+
+# Ethereum → Vara 应用指南
+
+## 介绍
+
+本文描述了从 **Ethereum 到 Vara** 构建跨链应用程序的流程。本指南演示如何设计一个基于事件的 "ping-pong" dApp，其中消息在 Ethereum 上发起，并在 Vara 上安全传递和处理。
+
+与反向方向（Vara → Ethereum）使用 ZK 证明来保证无需信任传递不同，**Ethereum → Vara** 路由基于**轻客户端**机制。在这里，Ethereum 端没有 ZK 证明。相反，信任是通过链上轻客户端验证 Ethereum 的共识来实现的——具体来说，通过**信标链**及其最终确定的检查点。
+
+在这种设计中，Ethereum 上的**事件日志**作为真相来源。应用程序在合约执行过程中发出事件。这些事件包含在 Ethereum 的规范链历史（信标链）中，并且可以被任何人通过密码学证明——但只有在 Ethereum 上达到最终性之后。
+
+一个无需许可的中继器观察信标链，为相关事件构建收据证明，并将它们提交给 Vara。在 Vara 上，一个轻客户端验证证明对应于 Ethereum 上实际最终确定的事件，只有在那时自定义的 Vara 程序才会被触发。
+
+这种机制本质上是**基于事件**和异步的。应用程序开发者不需要自己构建跨链桥或证明逻辑——只需要发出和处理事件，而无需信任的跨链桥和中继器管理跨链传输。
+
+为了简化，开发者现在可以使用现成的 [**GearJS Bridge 库**](https://github.com/gear-tech/gear-bridges/tree/main/js/bridge-js)，它执行大部分繁重的工作：证明生成、槽同步和提交到 Vara。这允许应用程序开发者纯粹专注于在 Ethereum 上发出事件和在 Vara 上编写接收逻辑。
+
+---
+
+## 高层架构
+
+[GitHub 上的完整源代码](https://github.com/gear-foundation/cross-ping/tree/master/packages)
+
+Ethereum → Vara 跨链应用程序由三个核心组件组成：
+
+1. **Ethereum 智能合约 (Ping 发射器)**
+   最小的合约 `EthPinger`，带有 `ping()` 函数，发出 `PingFromEthereum(address indexed from)`。
+   位置：[`eth-vara-pinger-eth/`](https://github.com/gear-foundation/cross-ping/tree/master/packages/eth-vara-pinger-eth)
+
+2. **中继器服务 (链下)**
+   - 连接到 Ethereum 和 Vara。
+   - 订阅 `PingFromEthereum` (Ethereum)。
+   - 对于每个事件：调用 `relayEthToVara({ transactionHash, ... })`。
+   - 可选地设置 `wait: true` 以阻塞直到所需的检查点最终确定。
+   位置：[`eth-vara-relayer-node/`](https://github.com/gear-foundation/cross-ping/tree/master/packages/eth-vara-relayer-node)
+
+3. **Vara 程序 (接收器)**
+   - **检查点轻客户端** — 跟踪最终确定的 Ethereum 检查点。
+   - **历史代理** — 验证证明并转发消息。
+   - **Ping 接收器** — 您的程序暴露 `SubmitReceipt(slot, transaction_index, receipt_rlp)`。
+   位置：[`eth-vara-receiver-vara/`](https://github.com/gear-foundation/cross-ping/tree/master/packages/eth-vara-receiver-vara)
+
+---
+
+## 实现细节
+
+### Ethereum 端
+
+一个发出事件的最小合约：
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract EthPinger {
+    event PingFromEthereum(address indexed from);
+
+    function ping() external {
+        emit PingFromEthereum(msg.sender);
+    }
+}
+```
+
+### 中继器端 (使用库)
+
+中继器的工作可以总结为**四个步骤**：连接到 Ethereum，连接到 Vara，监听事件，并使用库中继它们。
+
+#### 创建 Ethereum 客户端 (HTTP + WS)
+
+```ts
+// 通过 viem
+export const ethereumPublicClient = createPublicClient({ ... });
+export const ethereumWalletClient = createWalletClient({ ... });
+
+// 通过 ethers (用于 WS 订阅)
+const ethWs = new ethers.WebSocketProvider(ETHEREUM_WS_RPC_URL);
+listenPingFromEthereum(ethWs, (from, event) => {
+  const txHash = event.transactionHash;
+  handleEvent(txHash);
+});
+```
+
+#### 连接到 Vara 并初始化 Sails + 桥接事件
+
+```ts
+varaProvider = await GearApi.create({ providerAddress: VARA_RPC_URL });
+sails = new Sails(parser);
+sails.parseIdl(CROSS_PING_IDL);
+sails.setApi(varaProvider);
+sails.setProgramId(CROSS_PING_PROGRAM_ID);
+
+listenPingSent((e) => {
+  console.log("Ping confirmed on Vara:", e);
+});
+```
+
+#### 订阅 Ethereum 事件
+
+```ts
+const contract = new ethers.Contract(ETH_CONTRACT_ADDRESS, ETH_PINGER_ABI, provider);
+contract.on("PingFromEthereum", (_, payload) => {
+  const txHash = payload.log.transactionHash;
+  handleEvent(txHash);
+});
+```
+
+#### 通过 GearJS Bridge 中继到 Vara
+
+```ts
+import { relayEthToVara } from "@gear-js/bridge";
+
+async function handleEvent(txHash: `0x${string}`) {
+  const { ok, error } = await relayEthToVara({
+    transactionHash: txHash,
+    beaconRpcUrl: BEACON_API_URL,
+    ethereumPublicClient,
+    gearApi: varaProvider!,
+    checkpointClientId: CHECKPOINT_LIGHT_CLIENT,
+    historicalProxyId:  HISTORICAL_PROXY_ID,
+    clientId:           PING_RECEIVER_PROGRAM_ID,
+    clientServiceName: "PingReceiver",
+    clientMethodName:  "SubmitReceipt",
+    signer,
+    wait: true,
+  });
+
+  if (error) console.error("Proxy error:", error);
+  else        console.log("Relayed OK:", ok);
+}
+```
+
+这就是全部：**监听 Ethereum 事件 → 转发交易哈希 → 库处理证明和最终性**。
+完整代码可在[中继器包](https://github.com/gear-foundation/cross-ping/tree/master/packages/eth-vara-relayer-node)中找到。
+
+### Vara 端
+
+您的程序暴露一个服务方法，历史代理将在验证**之后**调用。
+**该方法必须被导出**以便可以从外部调用。
+
+一个在接收时发出内部事件的最小实现：
+
+```rust
+#![no_std]
+use sails_rs::prelude::*;
+
+#[sails_rs::event]
+#[derive(Encode, Decode, TypeInfo)]
+pub enum Event {
+    ReceiptSubmitted(u64, u32),
+}
+
+pub struct PingReceiverService;
+
+#[service(events = Event)]
+impl PingReceiverService {
+    #[export]
+    pub fn submit_receipt(
+        &mut self,
+        slot: u64,
+        transaction_index: u32,
+        _receipt_rlp: Vec<u8>,
+    ) -> Result<(), String> {
+        self.emit_event(Event::ReceiptSubmitted(slot, transaction_index))
+            .map_err(|_| "Failed to emit event".to_string())?;
+        Ok(())
+    }
+}
+```
+
+程序位置：
+- [`eth-vara-receiver-vara/`](https://github.com/gear-foundation/cross-ping/tree/master/packages/eth-vara-receiver-vara)
+
+**名称必须匹配**您从中继器传递的内容：
+- `clientServiceName = "PingReceiver"`
+- `clientMethodName  = "SubmitReceipt"`
+
+## 验证
+
+与轻客户端的槽同步大约需要 15-20 分钟（在 Ethereum 事件最终确定之后）。
+一旦槽最终确定，来自 HistoricalProxy 的消息将被传递到 Vara 上的应用程序程序。
