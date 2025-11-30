@@ -13,9 +13,21 @@ The Vara Fungible Token Standard outlines a unified API for implementing fungibl
 
 The subsequent section expands on how to leverage and extend this core service to develop a fully functional token application. It illustrates the process of adding advanced features like minting and burning, demonstrating how to build upon the core VFT service to create a comprehensive and customizable token system. This extension highlights the flexibility and potential of the core standard, providing a pathway to develop more sophisticated and tailored token solutions. The source code of the extended version is avaiable on the [GitHub](https://github.com/gear-foundation/standards/tree/master/extended-vft).
 
+A frontend guide showing how to use the `React Sails Hooks` with extended VFT program is available [here](/docs/examples/Standards/vft-frontend).
+
 :::tip
 The project code is developed using the [Sails](../../build/sails/sails.mdx) framework.
 ::: 
+
+## Public CodeIds
+
+You can instantiate the extended VFT using the public CodeId below. The instantiating account becomes the initial admin/minter/burner.
+
+- **CodeId**: `0x81663df58f48684923777cd8cf281bfd2e4ee427926abc52a1fcf4ecd41be7ad`  
+  * Mainnet: [link](https://idea.gear-tech.io/code/0x81663df58f48684923777cd8cf281bfd2e4ee427926abc52a1fcf4ecd41be7ad?node=wss%3A%2F%2Frpc.vara.network)
+  * Testnet: [link](https://idea.gear-tech.io/code/0x81663df58f48684923777cd8cf281bfd2e4ee427926abc52a1fcf4ecd41be7ad?node=wss%3A%2F%2Ftestnet.vara.network)
+
+> Open Gear IDEA → **Codes**, select the network, paste the CodeId, and click **Create Program**.
 
 ## Core VFT Service
 

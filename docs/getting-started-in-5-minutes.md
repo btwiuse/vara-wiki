@@ -8,38 +8,41 @@ sidebar_position: 4
 This guide provides a general overview of running programs on the [Vara Network](https://vara.network/). It guides you through how to write a program, compile it to Wasm and deploy it to the network.
 
 :::important
-Want to take your blockchain development skills to the next level? Join **[Gear Academy's](https://academy.gear.foundation/)** free courses. Start from scratch with our [Beginner Course](https://academy.gear.foundation/courses/basic_course) or explore the implementation of programs using Gear technologies with the [Intermediate Course](https://academy.gear.foundation/courses/intermediate-course). More courses are being developed.
-
-Don't miss this opportunity to become a pro Vara blockchain developer. Enroll now in Gear Academy's courses!
+Want to take your blockchain development skills to the next level? Don't miss this opportunity to become a pro Vara blockchain developer. 🔥 Try out the interactive [Sails tutorial](https://sails-tutorials.vara.network/hello-world/hello-world).
 :::
 
 ## Prerequisites
 
-1. Linux users should generally install `GCC` and `Clang` according to their distribution’s documentation.
+1. Linux users should generally install `GCC` and `Clang` according to their distribution's documentation.
 
-    For example, on Ubuntu use:
+For example, on Ubuntu use:
 
-    ```bash
-    sudo apt install -y build-essential clang cmake curl
-    ```
+```bash
+sudo apt install -y build-essential clang cmake curl
+```
 
-    On macOS, you can get a compiler toolset by running:
+On macOS, you can get a compiler toolset by running:
 
-    ```bash
-    xcode-select --install
-    ```
+```bash
+xcode-select --install
+```
 
 2. Make sure you have installed all the tools required to build a program in Rust. [Rustup](https://rustup.rs/) will be used to get Rust compiler ready:
 
-    ```bash
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-    ```
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
 
 3. A Wasm compiler is necessary for compiling a Rust program to Wasm, add it to the toolchain.
 
-    ```bash
-    rustup target add wasm32-unknown-unknown
-    ```
+```bash
+rustup target add wasm32v1-none
+```
+
+:::note
+Since Gear release 1.8.0, the new target `wasm32v1-none` is required for building programs for the Vara Network.  
+The old target `wasm32-unknown-unknown` is only needed for legacy projects.
+:::
 
 **_Note:_** If you use Windows, download and install [Build Tools for Visual Studio](https://visualstudio.microsoft.com/downloads/?q=build+tools).
 
@@ -54,7 +57,7 @@ To get started, install the `sails-cli` tool using the following command:
 After installation, you can create a new Vara project named `vara-app` by running:
 
     ```bash
-    cargo sails new-program vara-app
+    cargo sails program vara-app
     ```
 
 Your `vara-app` directory tree should look like this:
@@ -77,6 +80,8 @@ Your `vara-app` directory tree should look like this:
     │
     ├── build.rs
     │
+    ├── Cargo.lock
+    │
     ├── Cargo.toml
     │
     └──  README.md
@@ -85,32 +90,33 @@ Your `vara-app` directory tree should look like this:
 In `Cargo.toml`, the essential libraries required for building your first project have been included, for example:
 
     ```rust title="vara-app/Cargo.toml"
-    [workspace]
-
-    members = ["client"]
-
-
     [package]
     name = "vara-app"
     version = "0.1.0"
-    edition = "2021"
+    edition = "2024"
 
     [dependencies]
-    vara-app-app = { path = "app" }
+    sails-rs = "0.9.1"
+    vara-app-app = { version = "0.1.0", path = "app" }
+
+    [workspace]
+    resolver = "3"
+    members = ["app", "client"]
+
+    [workspace.package]
+    version = "0.1.0"
+    edition = "2024"
 
     [build-dependencies]
-    vara-app-app = { path = "app" }
-    sails-rs = { version = "0.5.0", features = ["wasm-builder"] }
-    sails-idl-gen = "0.5.0"
+    sails-rs = { version = "0.9.1", features = ["build"] }
+    vara-app-app = { version = "0.1.0", path = "app" }
 
     [dev-dependencies]
-    vara-app = { path = ".", features = ["wasm-binary"] }
+    sails-rs = { version = "0.9.1", features = ["gtest", "gclient"] }
+    tokio = { version = "1.47.1", features = ["rt", "macros"] }
+    vara-app-app = { path = "app" }
     vara-app-client = { path = "client" }
-    sails-rs = { version = "0.5.0", features = ["gtest"] }
-    tokio = { version = "1.39", features = ["rt", "macros"] }
 
-    [features]
-    wasm-binary = []
     ```
 
 Let's move on to the main code:
@@ -122,37 +128,36 @@ This Rust code defines a simple program for the Vara Network, now updated with a
 
     use sails_rs::prelude::*;
 
-    struct VaraAppService(());
+    struct Service(());
 
-    #[sails_rs::service]
-    impl VaraAppService {
+    impl Service {
         pub fn new() -> Self {
             Self(())
         }
-
-        // Service's method (command)
-        pub fn do_something(&mut self) -> String {
-            "Hello from VaraApp!".to_string()
-        }
-
-        // Service's query
-        pub fn get_something(&self) -> String {
-            "Hello from VaraApp!".to_string()
-        }  
     }
 
-    pub struct VaraAppProgram(());
+    #[sails_rs::service]
+    impl Service { 
+        // Service's method (command)
+        #[export]
+        pub fn do_something(&mut self) -> String {
+            "Hello from Service!".to_string()
+        }
+    }
+
+    #[derive(Default)]
+    pub struct Program(());
 
     #[sails_rs::program]
-    impl VaraAppProgram {
+    impl Program {
         // Program's constructor
         pub fn new() -> Self {
             Self(())
         }
 
         // Exposed service
-        pub fn vara_app(&self) -> VaraAppService {
-            VaraAppService::new()
+        pub fn service(&self) -> Service {
+            Service::new()
         }
     }
     ```
@@ -176,7 +181,7 @@ If everything has been executed successfully, your working directory should now 
     ├── ...
     ├── target
         ├── ...
-        └── wasm32-unknown-unknown
+        └── wasm32-gear
             └── release
                 ├── vara_app.wasm       <---- this is our built .wasm file
                 ├── vara_app.opt.wasm   <---- this is optimized .wasm file
@@ -186,7 +191,7 @@ If everything has been executed successfully, your working directory should now 
 - `vara_app.wasm` is the output Wasm binary built from source files
 - `vara_app.opt.wasm` is the optimized Wasm aimed to be uploaded to the blockchain  
 (Optimization include reducing the file size and improving performance)
-- `vara_app.idl` is the Interface Definition Language (IDL) file that describes the application's interface, defining the structure and methods callable on the `vara_app` program. It’s essential for interacting with the application on the blockchain, specifying available functions and their inputs and outputs. This file is crucial for developers and clients to ensure they use the correct method signatures and data types when interacting with the deployed program.
+- `vara_app.idl` is the Interface Definition Language (IDL) file that describes the application's interface, defining the structure and methods callable on the `vara_app` program. It's essential for interacting with the application on the blockchain, specifying available functions and their inputs and outputs. This file is crucial for developers and clients to ensure they use the correct method signatures and data types when interacting with the deployed program.
 
 ## Deploy your program to the Testnet
 

@@ -1,5 +1,4 @@
 import { themes as prismThemes } from "prism-react-renderer";
-
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { type Config } from "@docusaurus/types";
@@ -98,12 +97,6 @@ const config: Config = {
         },
       ],
     },
-    announcementBar: {
-      id: "varathon",
-      content:
-        'Ready to build on the edge of Web3? Join Vara online hackathon - <a target="_blank" href="https://varathon.io/?utm_source=wiki&utm_medium=banner&utm_campaign=vara"> Gear Up</a>',
-      isCloseable: false,
-    },
     prism: {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
@@ -127,8 +120,7 @@ const config: Config = {
     {
       href: "https://cdn.jsdelivr.net/npm/katex@0.13.24/dist/katex.min.css",
       type: "text/css",
-      integrity:
-        "sha384-odtC+0UGzzFL/6PNoE8rX/SPcQDXBJ+uRepguP4QkPCm2LBxH3FA3y+fKSiJ+AmM",
+      integrity: "sha384-odtC+0UGzzFL/6PNoE8rX/SPcQDXBJ+uRepguP4QkPCm2LBxH3FA3y+fKSiJ+AmM",
       crossorigin: "anonymous",
     },
     "https://fonts.googleapis.com/css2?family=Anuphan:wght@100..700&display=swap",
